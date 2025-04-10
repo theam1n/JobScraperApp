@@ -26,7 +26,7 @@ public class JobController {
 
     @GetMapping
     public ResponseEntity<List<JobDto>> scrapeJobs() throws IOException {
-        var response = djinniJobSeleniumScraper.scrapeJobs();
+        var response = djinniJobScrapeService.scrapeJobs();
         return ResponseEntity.ok(response);
     }
 }
