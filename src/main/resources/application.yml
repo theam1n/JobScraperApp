@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: JobScraperApp
+
+server:
+  port: 8080
+
+djinni:
+  email: ${EMAIL:aminaliyev838@gmail.com}
+  password: ${PASSWORD:Amin1234567890!}
+  baseUrl: https://djinni.co
+  loginUrl: https://djinni.co/login?from=frontpage_main
+  myUrl: https://djinni.co/my/
+  jobUrl: https://djinni.co/jobs/
+  keywordPath: any_of_keywords=
+  pagePath: page=
+
+

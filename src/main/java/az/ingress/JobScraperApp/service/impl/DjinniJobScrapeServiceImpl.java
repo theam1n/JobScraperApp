@@ -1,64 +1,56 @@
 package az.ingress.JobScraperApp.service.impl;
 
+import az.ingress.JobScraperApp.config.DjinniProperties;
+import az.ingress.JobScraperApp.config.MessageConstants;
 import az.ingress.JobScraperApp.model.dto.JobDto;
 import az.ingress.JobScraperApp.service.DjinniJobScrapeService;
-import io.github.bonigarcia.wdm.WebDriverManager;
+import az.ingress.JobScraperApp.util.DateParser;
+import az.ingress.JobScraperApp.util.StringUtil;
+import az.ingress.JobScraperApp.util.WebDriverHelper;
+import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.openqa.selenium.By;
-import org.openqa.selenium.Cookie;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.support.ui.ExpectedConditions;
-import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.time.*;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class DjinniJobScrapeServiceImpl implements DjinniJobScrapeService {
 
-    private static final String BASE_URL = "https://djinni.co";
+    private final DjinniProperties djinniProperties;
+    private final WebDriverHelper webDriverHelper;
 
     @Override
-    public List<JobDto> scrapeJobs() throws IOException {
+    public List<JobDto> scrapeJobs(Long daysBefore, List<String> keywords) throws IOException {
         List<JobDto> jobs = new ArrayList<>();
-        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusDays(5);
+        LocalDateTime referenceTime = LocalDateTime.now().minusDays(daysBefore);
 
-        WebDriverManager.chromedriver().setup();
-        ChromeOptions options = new ChromeOptions();
-        options.addArguments("--headless=new");
-        options.addArguments("--disable-gpu");
-        options.addArguments("--disable-javascript");
-        WebDriver driver = new ChromeDriver(options);
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-
-        driver.get("https://djinni.co/login?from=frontpage_main");
-        wait.until(ExpectedConditions.visibilityOfElementLocated(By.name("email"))).sendKeys("aminaliyev838@gmail.com");
-        driver.findElement(By.name("password")).sendKeys("Amin1234567890!");
-        driver.findElement(By.cssSelector("button[type='submit']")).click();
-
-        wait.until(driver1 -> driver1.getCurrentUrl().startsWith("https://djinni.co/my/"));
-
-        Set<Cookie> seleniumCookies = driver.manage().getCookies();
-        Map<String, String> jsoupCookies = new HashMap<>();
-        for (Cookie cookie : seleniumCookies) {
-            jsoupCookies.put(cookie.getName(), cookie.getValue());
-        }
-
-        driver.quit();
+        Map<String, String> jsoupCookies = webDriverHelper.login();
 
         int page = 1;
 
+        String keywordPath = "";
+        if (keywords != null && !keywords.isEmpty()) {
+            keywordPath = keywords.stream()
+                    .map(keyword -> djinniProperties.getKeywordPath() + keyword)
+                    .collect(Collectors.joining("&", "?", ""));
+        }
+
+        String url = djinniProperties.getJobUrl() + keywordPath + (keywordPath.isEmpty() ? "" : "&");
+
+
         while (true) {
-            String url = BASE_URL + "/jobs" + "/?page=" + page;
-            Document document = Jsoup.connect(url).cookies(jsoupCookies).get();
+            String pagePath = djinniProperties.getPagePath() + page;
+
+            Document document = Jsoup.connect(url + pagePath).cookies(jsoupCookies).get();
 
             Elements jobElements = document.select("ul.list-jobs li[id^=job-item]");
 
@@ -69,37 +61,41 @@ public class DjinniJobScrapeServiceImpl implements DjinniJobScrapeService {
             for (Element jobElement : jobElements) {
 
                 Element dateElement = jobElement.selectFirst("span.text-nowrap[title]");
-                String fullDateStr = dateElement != null ? dateElement.attr("title") : "";
+                LocalDateTime localPostedDateTime = DateParser.parsePostedDate(dateElement);
 
-                if (fullDateStr == null || fullDateStr.isBlank()) continue;
-
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm dd.MM.yyyy");
-                LocalDateTime postedDateTime = LocalDateTime.parse(fullDateStr, formatter);
-                ZonedDateTime zonedDateTime = postedDateTime.atZone(ZoneId.of("UTC+3"));
-                LocalDateTime localPostedDateTime = zonedDateTime.toLocalDateTime();
-
-                if (localPostedDateTime.isBefore(tenMinutesAgo)) {
+                if (localPostedDateTime.isBefore(referenceTime)) {
                     stop = true;
                     break;
                 }
 
                 String title = jobElement.select("a.job-item__title-link").text();
+
                 String company;
                 try {
                     company = jobElement.select("a[data-analytics='company_page']").text();
                 } catch (Exception e) {
-                    company = "No Company";
+                    company = MessageConstants.EMPTY_COMPANY;
                 }
+
+                String companyLogo;
+                try {
+                    companyLogo = jobElement.select("img.userpic-image_img").attr("src");
+                    if (companyLogo == null || companyLogo.isEmpty()) {
+                        companyLogo = MessageConstants.EMPTY_COMPANY_LOGO;
+                    }
+                } catch (Exception e) {
+                    companyLogo = MessageConstants.EMPTY_COMPANY_LOGO;
+                }
+
                 String location = jobElement.select(".location-text").text();
-                String link = BASE_URL + jobElement.select("a.job-item__title-link").attr("href");
+                String sourceLink = djinniProperties.getBaseUrl() + jobElement.select("a.job-item__title-link").attr("href");
+                String description = jobElement.select("span.js-original-text").text();
+                String experience = StringUtil.extractExperience(jobElement);
 
                 if (isValidJob(location, jobElement.text())) {
-                    JobDto job = new JobDto();
-                    job.setTitle(title);
-                    job.setCompanyName(company);
-                    job.setLocation(location);
-                    job.setPostedDate(localPostedDateTime.toLocalDate());
-                    job.setSource(link);
+                    JobDto job = JobDto.builder().title(title).companyName(company).companyLogo(companyLogo)
+                            .location(location).postedDate(localPostedDateTime).source(sourceLink)
+                            .jobDescription(description).experienceLevel(experience).build();
                     jobs.add(job);
                 }
             }
@@ -119,5 +115,6 @@ public class DjinniJobScrapeServiceImpl implements DjinniJobScrapeService {
                 || (location.contains("remote") && fullText.contains("azerbaijan"))
                 || fullText.contains("relocation");
     }
+
 
 }

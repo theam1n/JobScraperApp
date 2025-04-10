@@ -7,5 +7,5 @@ import java.util.List;
 
 public interface DjinniJobScrapeService {
 
-    List<JobDto> scrapeJobs() throws IOException;
+    List<JobDto> scrapeJobs(Long daysBefore, List<String> keywords) throws IOException;
 }
