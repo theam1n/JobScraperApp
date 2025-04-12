@@ -1,6 +1,5 @@
 package az.ingress.JobScraperApp.model.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,29 +7,20 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class JobDto {
-
-    String title;
-
-    String source;
-
-    String companyName;
+public class FilterRequestDto {
 
     String location;
 
-    String experienceLevel;
+    Integer minExperienceYear;
 
-    LocalDateTime postedDate;
+    Integer maxExperienceYear;
 
-    String companyLogo;
-
-    String jobDescription;
+    List<String> keywords;
 }

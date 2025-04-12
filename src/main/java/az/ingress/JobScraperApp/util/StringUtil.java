@@ -19,4 +19,21 @@ public class StringUtil {
 
         return MessageConstants.NO_EXPERIENCE_FOUND;
     }
+
+    public static Integer extractExperienceYear(String experienceLevel) {
+        if (experienceLevel == null || experienceLevel.isEmpty()) {
+            return null;
+        }
+
+        try {
+            String yearString = experienceLevel.replaceAll("[^0-9]", "");
+            if (!yearString.isEmpty()) {
+                return Integer.parseInt(yearString);
+            }
+
+            return null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
 }
